@@ -1,13 +1,17 @@
 /* Code Written by Rishi Tiwari
  *  Website:- https://tricksumo.com
 */
-int outputpin= A0;
-#include <WiFiClient.h>
 
+#include <WiFiClient.h>
+#include <Wire.h>
 #include <SoftwareSerial.h>
 #include <ArduinoJson.h>
+#include <LiquidCrystal_I2C.h>
+#include <Adafruit_MLX90614.h>
+LiquidCrystal_I2C lcd(0x27, 16, 2); 
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
-//D6 = Rx & D5 = Tx
+
 SoftwareSerial nodemcu(D6, D5);
 
 
@@ -28,32 +32,42 @@ WiFiClient wifiClient;
 
 
 
-String heart = "6";
-String time_1 = "5";
-String temp= "4";
-String oxy = "2";
+String heart ;
+String time_1 ;
+String temp;
+String oxy ;
 
-String sendval, sendval2, postData;
+String  postData;
 
 
 void setup() {
-
-     
-Serial.begin(9600); 
-
-nodemcu.begin(9600);
-while (!Serial) continue;
-Serial.println("Communication Started \n\n");  
-delay(1000);
   
+     
+  Serial.begin(9600); 
+ 
+  nodemcu.begin(9600);
+  mlx.begin();  
+  Wire.begin(D4,D3);
 
-pinMode(LED_BUILTIN, OUTPUT);     // initialize built in led on the board
+  lcd.begin();
+  
+  lcd.home();
+  
+  lcd.print("Health Monitor");
+  while (!Serial) continue;
+  Serial.println("Communication Started \n\n");  
+  delay(1000);
+    
+  
+  pinMode(LED_BUILTIN, OUTPUT);     // initialize built in led on the board
  
 
 
 WiFi.mode(WIFI_STA);           
 WiFi.begin(WIFI_SSID, WIFI_PASSWORD);                                     //try to connect with wifi
 Serial.print("Connecting to ");
+lcd.clear();
+lcd.print("Connecting wifi");
 Serial.print(WIFI_SSID);
 while (WiFi.status() != WL_CONNECTED) 
 { Serial.print(".");
@@ -61,6 +75,8 @@ while (WiFi.status() != WL_CONNECTED)
 
 Serial.println();
 Serial.print("Connected to ");
+lcd.clear();
+lcd.print("Connected");
 Serial.println(WIFI_SSID);
 Serial.print("IP Address is : ");
 Serial.println(WiFi.localIP());    //print local IP address
@@ -71,13 +87,11 @@ delay(30);
 
 
 void loop() { 
-  int analogValue = analogRead(outputpin);
-  float millivolts = (analogValue/1024.0) * 3300; //3300 is the voltage provided by NodeMCU
-  float celsius = millivolts/10;
+  
+  float celsius =mlx.readObjectTempC();
   Serial.print("in DegreeC=   ");
   Serial.println(celsius);
   HTTPClient http;    // http object of clas HTTPClient
-  
   
   StaticJsonBuffer<100> jsonBuffer;
   JsonObject& data = jsonBuffer.parseObject(nodemcu);
@@ -87,35 +101,51 @@ void loop() {
     jsonBuffer.clear();
     return;
   }
-
-  Serial.println("JSON Object Recieved");
+  lcd.clear();
+  Serial.println("Object Recieved");
+  lcd.print("Object Recieved");
 
   Serial.print("spo2e:  ");
   float spo2 = data["SPO2"];
   Serial.println(spo2);
   float heart = data["heartbeat"];
+  lcd.clear();
+  lcd.print("T ");
+  lcd.print(celsius);
+  lcd.print("C");
+
+  lcd.setCursor(7,0);
+  lcd.print("BPM ");
+  lcd.print(heart);
+
+  lcd.setCursor(0,1);
+  lcd.print("SPO2 ");
+  lcd.print(spo2);
+  
   Serial.println(heart);
   Serial.println("-----------------------------------------");
 
   postData = "oxy=" + String(spo2) +  "&temp=" + String(celsius) + "&heart=" + String(heart);
   
-  // We can post values to PHP files as  example.com/dbwrite.php?name1=val1&name2=val2&name3=val3
-  // Hence created variable postDAta and stored our variables in it in desired format
-  // For more detials, refer:- https://www.tutorialspoint.com/php/php_get_post.htm
+ 
   
   // Update Host URL here:-  
   
-  http.begin(wifiClient,"http://ascraplive.000webhostapp.com/code.php");              // Connect to host where MySQL databse is hosted
-  http.addHeader("Content-Type", "application/x-www-form-urlencoded");            //Specify content-type header
+  http.begin(wifiClient,"http://ascraplive.000webhostapp.com/code.php");          
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");           
   
     
    
-  int httpCode = http.POST(postData);   // Send POST request to php file and store server response code in variable named httpCode
+  int httpCode = http.POST(postData);  
   Serial.println("Values are, heart = " + String(heart) + " and oxy = "+String(oxy) +"and temp = "+String(temp));
   
   
   // if connection eatablished then do this
-  if (httpCode == 200) { Serial.println("Values uploaded successfully."); Serial.println(httpCode); 
+  if (httpCode == 200) { 
+    lcd.clear();
+    lcd.print("Uploaded");
+    Serial.println("Values uploaded successfully."); 
+    Serial.println(httpCode); 
   String webpage = http.getString();    // Get html webpage output and store it in a string
   Serial.println(webpage + "\n"); 
   }
@@ -134,7 +164,8 @@ void loop() {
   delay(3000);
   digitalWrite(LED_BUILTIN, HIGH);
   delay(10000);
-   // Incrementing value of variables 
+  lcd.clear();
+
 
 
 
